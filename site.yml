@@ -1,0 +1,7 @@
+---
+- name: Playbook to install podman and use non default disks for storage
+  hosts: rhel8
+  become: yes
+
+  roles:
+    - role: podman

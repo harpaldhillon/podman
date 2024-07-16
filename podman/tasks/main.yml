@@ -1,0 +1,98 @@
+---
+- name: Install podman
+  yum:
+    name: podman
+    state: present
+
+- name: Create custom storage for podman
+  file:
+    path: "/home/{{ user }}/.config/containers"
+    owner: "{{ user }}"
+    group: "{{ user }}"
+    mode: '0755'
+    state: directory
+
+- name: Copy file
+  copy:
+    src: "{{ item }}"
+    dest: "/home/{{ user }}/.config/containers/{{ item }}"
+    owner: "{{ user }}"
+    group: "{{ user }}"
+    mode: '0755'
+  loop:
+    - containers.conf 
+    - storage.conf
+
+- name: Ensure the disk has a partition
+  parted:
+    device: "{{ item.device }}"
+    number: "{{ partition_number }}"
+    state: present
+    part_type: primary
+    part_start: "0%"
+    part_end: "100%"
+  ignore_errors: yes
+  loop: "{{ devices }}"
+
+- name: Create a Physical Volume (PV)
+  command: pvcreate "{{ item.device }}p{{ partition_number }}"
+  loop: "{{ devices }}"
+  register: pvcreate_result
+  ignore_errors: yes
+  failed_when: "pvcreate_result.rc != 0"
+
+- name: Create a Volume Group (VG)
+  command: vgcreate {{ item.vg_name }} "{{ item.device }}p{{ partition_number }}"
+  loop: "{{ devices }}"
+  register: vgcreate_result
+  ignore_errors: yes
+  failed_when: "vgcreate_result.rc != 0"
+
+- name: Create a Logical Volume (LV)
+  command: lvcreate -L {{ item.lv_size }} -n {{ item.lv_name }} {{ item.vg_name }}
+  loop: "{{ devices }}"
+  register: lvcreate_result
+  ignore_errors: yes
+  failed_when: "lvcreate_result.rc != 0"
+
+- name: Format the Logical Volume with filesystem
+  filesystem:
+    fstype: "{{ item.filesystem }}"
+    dev: "/dev/{{ item.vg_name }}/{{ item.lv_name }}"
+  loop: "{{ devices }}"
+
+- name: Create mount point directory
+  file:
+    path: "{{ item.mount_point }}"
+    state: directory
+    owner: "{{ user }}"
+    group: "{{ user }}"
+    mode: '0755'
+  loop: "{{ devices }}"
+
+- name: Mount the Logical Volume
+  mount:
+    path: "{{ item.mount_point }}"
+    src: "/dev/{{ item.vg_name }}/{{ item.lv_name }}"
+    fstype: "{{ item.filesystem }}"
+    state: mounted
+  loop: "{{ devices }}"
+
+- name: Change folder permissions to non-root user
+  file:
+    path: "{{ item.mount_point }}"
+    #state: mounted
+    owner: "{{ user }}"
+    group: "{{ user }}"
+    mode: '0755'
+    recurse: yes
+  loop: "{{ devices }}"
+
+- name: Ensure the Logical Volume is mounted at boot
+  mount:
+    path: "{{ item.mount_point }}"
+    src: "/dev/{{ item.vg_name }}/{{ item.lv_name }}"
+    fstype: "{{ item.filesystem }}"
+    opts: "defaults"
+    state: present
+  loop: "{{ devices }}"

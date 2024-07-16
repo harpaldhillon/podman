@@ -1,0 +1,7 @@
+---
+# vars file for podman
+user: cloud_user
+devices:
+  - { device: "/dev/nvme1n1", vg_name: "vg_data", lv_name: "lv_data", mount_point: "/mnt/podmandata", lv_size: "1G", filesystem: "ext4" }
+  - { device: "/dev/nvme2n1", vg_name: "vg_tmp", lv_name: "lv_tmp", mount_point: "/mnt/podmantmp", lv_size: "1G", filesystem: "ext4" }
+partition_number: "1"          # Partition number to create
